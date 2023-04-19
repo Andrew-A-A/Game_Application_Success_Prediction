@@ -1,6 +1,6 @@
 from Preprocessing import *
 
-new_columns=[]
+new_columns = []
 
 
 def feature_encoder_apply(test, columns):
@@ -11,6 +11,7 @@ def feature_encoder_apply(test, columns):
 
 
 def hot_one_encode(df, column, new_columns=None):
+    y = df['Average_User_Rating']
     # Convert the string in column Genres into a list
     df[column] = df[column].apply(lambda x: x.replace(' ', '').split(','))
     # Split the values in column Genres into multiple rows
@@ -24,7 +25,6 @@ def hot_one_encode(df, column, new_columns=None):
         missing_columns = new_columns.difference(df_encoded.columns)
         for col in missing_columns:
             df_encoded[col] = 0
-
     # Drop the duplicates
     df_encoded = df_encoded.drop_duplicates()
 
@@ -42,13 +42,14 @@ def preprocess_test_data(x, y):
     # Drop unimportant columns
     unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL', 'Description']
     x = drop_columns(x, unimportant_columns)
-
+    print(x['Genres'].isnull().sum())
     # Fill null values
     for col in x.columns:
         if col == 'In-app Purchases':
             x[col] = fill_nulls(x[col], 0)
         else:
-            x[col] = fill_nulls_with_mode(x[col])
+            if global_vars.get(col) is not None:
+                x[col] = fill_nulls(x[col], global_vars[col])
 
     # change datatypes from object
     x = x.convert_dtypes()
@@ -81,4 +82,5 @@ def preprocess_test_data(x, y):
     test_data = hot_one_encode(test_data, 'Genres', new_columns)
     y = test_data['Average_User_Rating']
     x = test_data.drop('Average_User_Rating', axis=1)
+
     return x, y
