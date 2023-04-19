@@ -1,9 +1,8 @@
-import numpy as np
 import pandas as pd
 from sklearn import metrics
 from sklearn import preprocessing
 from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import LabelEncoder
+from CustomLabelEncoder import *
 from sklearn.model_selection import KFold, cross_val_score
 
 """
@@ -12,23 +11,18 @@ or mode (for categorical data) in order to fill nulls in testing data with this 
 # Key => column name, Value=>(mean/mode)
 global_vars = {}
 
+lbl = CustomLabelEncoder()
+standardization = preprocessing.StandardScaler()
+
+selected_features = []
+
 
 # Encode specific features and return updated dataframe
-def feature_encoder(df, columns):
+def feature_encoder_fit(df, columns):
     for c in columns:
-        lbl = LabelEncoder()
         lbl.fit(list(df[c].values))
         df[c] = lbl.transform(list(df[c].values))
     return df
-
-
-# Scale features in a given range ( a -> b )
-def feature_scaling(df, a, b):
-    df = np.array(df)
-    normalized_x = np.zeros((df.shape[0], df.shape[1]))
-    for i in range(df.shape[1]):
-        normalized_x[:, i] = ((df[:, i] - min(df[:, i])) / (max(df[:, i]) - min(df[:, i]))) * (b - a) + a
-    return normalized_x
 
 
 # Remove first word of a string that contains some words separated with comma (,)
@@ -85,11 +79,15 @@ def hot_one_encode(df, column):
     df = df.explode(column)
 
     # Apply one-hot encoding to column Genres
-    df = pd.get_dummies(df, columns=[column])
+    df_encoded = pd.get_dummies(df, columns=[column])
+
+    # Get the names of the columns that were added
+    new_columns = df_encoded.columns.difference(df.columns)
 
     # Drop the duplicates
-    df = df.drop_duplicates()
-    return df
+    df_encoded = df_encoded.drop_duplicates()
+
+    return df_encoded, new_columns
 
 
 # Apply cross validation
@@ -118,10 +116,8 @@ def outlier_iqr_replace(df):
     return df
 
 
-def wrapper_feature_selection(df, x_train, y_train, x_test, y_test):
+def wrapper_feature_selection(x_train, y_train, x_test, y_test):
     count = 0
-    selected_features = []
-    y = df['Average_User_Rating']
     for col in x_train.columns:
         x_current = x_train.loc[:, col]
         linear_model = LinearRegression()
@@ -144,17 +140,36 @@ def wrapper_feature_selection(df, x_train, y_train, x_test, y_test):
             print(f"Test mean sqError for {col} {metrics.mean_squared_error(y_test, linear_model.predict(temp))} \n")
     global_vars['In-app Purchases'] = 0.0
     print(f"counter = {count}")
-    df = df[selected_features]
-    df = df.join(y)
-    return df
+    x_train = x_train[selected_features]
+    return x_train
 
 
-def feature_scale(df):
+def feature_standardization_fit(df):
     column_names = df.columns.tolist()
-    standardization = preprocessing.StandardScaler()
-    scaled_data = standardization.fit_transform(df)
+    standardization.fit(df)
+    scaled_data = standardization.transform(df)
     df = pd.DataFrame(scaled_data, columns=column_names)
     return df
+
+
+# Scale features in a given range ( a -> b )
+def feature_scaling(df, a, b):
+    df = np.array(df)
+    normalized_x = np.zeros((df.shape[0], df.shape[1]))
+    for i in range(df.shape[1]):
+        normalized_x[:, i] = ((df[:, i] - min(df[:, i])) / (max(df[:, i]) - min(df[:, i]))) * (b - a) + a
+    return normalized_x
+
+
+def calc_modes_of_features(x_train):
+    for col in x_train.columns:
+        if x_train[col].nunique() > 2:
+            mean = x_train[col].mean()
+            global_vars[col] = mean
+        else:
+            mode = x_train[col].mode()
+            global_vars[col] = mode
+    return x_train
 
 # from pandas_profiling import ProfileReport
 # generate the profile report
