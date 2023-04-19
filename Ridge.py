@@ -2,12 +2,12 @@ from App import *
 from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import KFold
 
-#Ridge Regression Model
-kfold=KFold(n_splits=5)
-ridgeReg = RidgeCV(alphas = [0.0001, 0.001,0.01, 0.1, 1, 10],cv=kfold)
-ridgeReg.fit(x_train,y_train)
+# Ridge Regression Model
+fold = KFold(n_splits=5)
+ridgeReg = RidgeCV(alphas=[0.0001, 0.001, 0.01, 0.1, 1, 10], cv=fold)
+ridgeReg.fit(x_train, y_train)
 
-#train and test scorefor ridge regression
+# train and test score for ridge regression
 train_score_ridge = ridgeReg.score(x_train, y_train)
 test_score_ridge = ridgeReg.score(x_test, y_test)
 
