@@ -95,7 +95,7 @@ def hot_one_encode(df, column):
 # Apply cross validation
 def cross_validation(model, x_train, y_train):
     k_folds = KFold(n_splits=5)
-    scores = cross_val_score(model, x_train, y_train, scoring='neg_root_mean_squared_error', cv=k_folds)
+    scores = cross_val_score(model, x_train, y_train, scoring='neg_mean_squared_error', cv=k_folds)
     model_score = abs(scores.mean())
     print("model 1 cross validation score is " + str(model_score))
 
