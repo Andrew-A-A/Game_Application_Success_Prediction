@@ -10,7 +10,7 @@ Y = df['Average_User_Rating']
 X = df.drop('Average_User_Rating', axis=1)
 
 # Split the X and the Y to training and testing sets
-x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=False, random_state=0)
+x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=10)
 
 # Drop unimportant columns
 unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL', 'Description']
@@ -51,7 +51,6 @@ x_train = explode_date(x_train, 'Current Version Release Date')
 # Replace outliers
 x_train = outlier_iqr_replace(x_train)
 
-
 # Apply hot one encoding for the "Genres" column
 train_data = x_train.join(y_train)
 train_data, Test.new_columns = hot_one_encode(train_data, 'Genres')
@@ -65,9 +64,7 @@ x_test = x_test.loc[:, x_train.columns]
 # Feature selection
 x_train = wrapper_feature_selection(x_train, y_train, x_test, y_test)
 
-
 x_test = x_test[selected_features]
-
 
 # Apply feature standardization
 test_data = x_test.join(y_test)

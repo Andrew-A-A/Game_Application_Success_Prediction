@@ -174,7 +174,7 @@ def wrapper_feature_selection(x_train, y_train, x_test, y_test):
             print(f"Train mean sqError {col}{metrics.mean_squared_error(y_train, linear_model.predict(x_current))}\n")
             print(f"Test mean sqError for {col} {metrics.mean_squared_error(y_test, linear_model.predict(temp))} \n")
     global_vars['In-app Purchases'] = 0.0
-    print(f"counter = {count}")
+    #print(f"counter = {count}")
     x_train = x_train[selected_features]
 
     return x_train
