@@ -1,14 +1,17 @@
 import Test
 from Preprocessing import *
 from sklearn.model_selection import train_test_split
+
 # Load the csv file
 df = pd.read_csv("games-regression-dataset.csv")
+
 # Split data frame to X and Y
 Y = df['Average_User_Rating']
 X = df.drop('Average_User_Rating', axis=1)
 
 # Split the X and the Y to training and testing sets
-x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=False, random_state=0)
+x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=10)
+
 # Drop unimportant columns
 unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL', 'Description']
 x_train = drop_columns(x_train, unimportant_columns)
@@ -45,6 +48,9 @@ x_train = explode_date(x_train, 'Original Release Date')
 # (Current Version Release Date_day, Current Version Release Date_month, Current Version Release Date_year)
 x_train = explode_date(x_train, 'Current Version Release Date')
 
+# Replace outliers
+x_train = outlier_iqr_replace(x_train)
+
 # Apply hot one encoding for the "Genres" column
 train_data = x_train.join(y_train)
 train_data, Test.new_columns = hot_one_encode(train_data, 'Genres')
@@ -53,15 +59,15 @@ x_train = train_data.drop('Average_User_Rating', axis=1)
 
 calc_modes_of_features(x_train)
 x_test, y_test = Test.preprocess_test_data(x_test, y_test)
+x_test = x_test.loc[:, x_train.columns]
 
 # Feature selection
 x_train = wrapper_feature_selection(x_train, y_train, x_test, y_test)
 
-# Drop the duplicates
-x_train = x_train.drop_duplicates()
+x_test = x_test[selected_features]
 
-# Replace outliers
-x_train = outlier_iqr_replace(x_train)
-
-# Apply feature scaling
-x_train = feature_standardization_fit(x_train)
+# Apply feature standardization
+test_data = x_test.join(y_test)
+train_data = x_train.join(y_train)
+train_data = feature_standardization_fit(train_data)
+test_data = Test.feature_standardization_apply(test_data)

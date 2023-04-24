@@ -4,6 +4,8 @@ from sklearn import preprocessing
 from sklearn.linear_model import LinearRegression
 from CustomLabelEncoder import *
 from sklearn.model_selection import KFold, cross_val_score
+from scipy.stats import pearsonr
+from sklearn.linear_model import LassoCV
 
 """
 Global dictionary that will store either mean of feature (for numerical data) 
@@ -15,6 +17,40 @@ lbl = CustomLabelEncoder()
 standardization = preprocessing.StandardScaler()
 
 selected_features = []
+
+def embedded_feature_selection(x_train, y_train):
+    """
+    Selects features using LASSO regularization.
+
+    Args:
+        x_train: DataFrame containing the training data.
+        y_train: Series containing the target variable for the training data.
+
+    Returns:
+        selected_features: list of selected features.
+    """
+    lassocv = LassoCV()
+    lassocv.fit(x_train, y_train)
+    selected_features = x_train.columns[lassocv.coef_ != 0]
+    return list(selected_features)
+def filter_feature_selection(x_train, y_train, threshold):
+    """
+    Selects features based on Pearson correlation with the target variable.
+
+    Args:
+        x_train: DataFrame containing the training data.
+        y_train: Series containing the target variable for the training data.
+        threshold: float, correlation threshold for feature selection.
+
+    Returns:
+        selected_features: list of selected features.
+    """
+    selected_features = []
+    for col in x_train.columns:
+        correlation, _ = pearsonr(x_train[col], y_train)
+        if abs(correlation) > threshold:
+            selected_features.append(col)
+    return selected_features
 
 
 # Encode specific features and return updated dataframe
@@ -83,7 +119,6 @@ def hot_one_encode(df, column):
 
     # Get the names of the columns that were added
     new_columns = df_encoded.columns.difference(df.columns)
-
     # Drop the duplicates
     df_encoded = df_encoded.drop_duplicates()
 
@@ -139,8 +174,9 @@ def wrapper_feature_selection(x_train, y_train, x_test, y_test):
             print(f"Train mean sqError {col}{metrics.mean_squared_error(y_train, linear_model.predict(x_current))}\n")
             print(f"Test mean sqError for {col} {metrics.mean_squared_error(y_test, linear_model.predict(temp))} \n")
     global_vars['In-app Purchases'] = 0.0
-    print(f"counter = {count}")
+    #print(f"counter = {count}")
     x_train = x_train[selected_features]
+
     return x_train
 
 
