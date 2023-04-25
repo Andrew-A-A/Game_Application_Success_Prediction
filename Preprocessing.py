@@ -18,6 +18,7 @@ standardization = preprocessing.StandardScaler()
 
 selected_features = []
 
+
 def embedded_feature_selection(x_train, y_train):
     """
     Selects features using LASSO regularization.
@@ -33,6 +34,8 @@ def embedded_feature_selection(x_train, y_train):
     lassocv.fit(x_train, y_train)
     selected_features = x_train.columns[lassocv.coef_ != 0]
     return list(selected_features)
+
+
 def filter_feature_selection(x_train, y_train, threshold):
     """
     Selects features based on Pearson correlation with the target variable.
@@ -174,7 +177,7 @@ def wrapper_feature_selection(x_train, y_train, x_test, y_test):
             print(f"Train mean sqError {col}{metrics.mean_squared_error(y_train, linear_model.predict(x_current))}\n")
             print(f"Test mean sqError for {col} {metrics.mean_squared_error(y_test, linear_model.predict(temp))} \n")
     global_vars['In-app Purchases'] = 0.0
-    #print(f"counter = {count}")
+    # print(f"counter = {count}")
     x_train = x_train[selected_features]
 
     return x_train
