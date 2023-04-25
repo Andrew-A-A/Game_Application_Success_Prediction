@@ -9,6 +9,45 @@ from sklearn.linear_model import LinearRegression, LassoCV, RidgeCV, ElasticNet
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, KFold, cross_val_score, GridSearchCV
 from sklearn.preprocessing import LabelEncoder, StandardScaler, PolynomialFeatures
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+lemmatizer = WordNetLemmatizer()
+vectorizer = TfidfVectorizer()
+
+def preprocess_text(text):
+    words = word_tokenize(text.lower())
+    words = [lemmatizer.lemmatize(w) for w in words]
+    s_words = set(words)
+    return s_words
+
+def feature_extraction(col):
+    returned_list = []
+    for description in col:
+        words = preprocess_text(description)
+        meaningful_words = []
+        for word in words:
+            if len(word) < 3:
+                continue
+            synsets = wordnet.synsets(word)
+            if synsets:
+                meaningful_words.append(word)
+
+        pos_tags = nltk.pos_tag(meaningful_words)
+        nouns = [word for word, pos in pos_tags if pos.startswith('NN')]
+        nouns = ' '.join(nouns)
+        returned_list.append(nouns)
+    returned_list = pd.DataFrame({'New':returned_list})
+    print(returned_list)
+    features = vectorizer.fit_transform(returned_list['New'])
+    print(features)
+    return features
+
+import feature_extraction_bouns
 
 
 def drop_columns(data_frame, columns_names):
@@ -88,13 +127,19 @@ print(df.dtypes)
 Y = df['Average_User_Rating']
 X = df.drop('Average_User_Rating', axis=1)
 print(X.columns)
+
+# X['Description'] = vectorizer.fit_transform(X['Description']).shape[1]
+
 # Split the X and the Y to training and testing sets
 x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=False, random_state=0)
 
 # ----------------------------------------Training Preprocessing----------------------------------------
 # Drop unimportant columns
-unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL', 'Description']
+unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL']
 x_train = drop_columns(x_train, unimportant_columns)
+
+# x_train['Description'] = x_train['Description'].apply(lambda x: feature_extraction(x).shape[1])
+x_train['Description'] = feature_extraction(x_train['Description']).shape[1]
 
 # Fill missing values in "In-app purchases" column with zero
 x_train['In-app Purchases'] = fill_nulls(x_train['In-app Purchases'], 0)
@@ -173,7 +218,7 @@ print(x_train.shape)
 
 data = x_train.join(y_train)
 game_data = data.iloc[:, :]
-corr = game_data.corr(method='spearman', numeric_only=True)
+corr = game_data.corr(method='spearman')
 # #Top 50% Correlation training features with the Value
 top_feature = corr.index[abs(corr['Average_User_Rating']) > 0.03]
 # Correlation plot
@@ -195,6 +240,9 @@ x_train = game_data.drop('Average_User_Rating', axis=1)
 
 x_test = drop_columns(x_test, unimportant_columns)
 
+# x_test['Description'] = x_test['Description'].apply(lambda x: feature_extraction(x).shape[1])
+x_test['Description'] = feature_extraction(x_test['Description']).shape[1]
+
 # Fill missing values in "In-app purchases" column with zero
 # x_test['In-app Purchases'] = fill_nulls(x_test['In-app Purchases'], 0)
 x_test['In-app Purchases'] = calc_sum_of_list(x_test['In-app Purchases'])
@@ -213,7 +261,7 @@ x_test['Age Rating'] = x_test['Age Rating'].astype(int)
 print(x_train.dtypes)
 global_vars['Genres'] = global_vars['Primary Genre']
 for col in x_test.columns:
-    if col == 'In-app Purchases' or col == 'Price':
+    if col == 'In-app Purchases' or col == 'Price' or col == 'Description':
         x_test[col] = fill_nulls(x_test[col], 0)
     else:
         x_test[col].fillna(global_vars[col], inplace=True)
