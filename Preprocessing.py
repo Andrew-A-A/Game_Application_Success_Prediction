@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn import metrics
 from sklearn import preprocessing
+from sklearn.feature_selection import RFE
 from sklearn.linear_model import LinearRegression
 from CustomLabelEncoder import *
 from sklearn.model_selection import KFold, cross_val_score
@@ -65,9 +66,6 @@ def feature_encoder_fit(df, columns):
 
 
 # Remove first word of a string that contains some words separated with comma (,)
-def remove_first_word(feature):
-    feature = list(feature.apply(lambda colm: ', '.join(colm.split(', ')[1:])))
-    return feature
 
 
 # Fill null values with a given value
@@ -154,33 +152,33 @@ def outlier_iqr_replace(df):
     return df
 
 
-def wrapper_feature_selection(x_train, y_train, x_test, y_test):
-    count = 0
-    for col in x_train.columns:
-        x_current = x_train.loc[:, col]
-        linear_model = LinearRegression()
-        y_test = np.array(y_test).reshape(-1, 1)
-        y_train = np.array(y_train).reshape(-1, 1)
-        x_current = np.array(x_current).reshape(-1, 1)
-        temp = x_test.loc[:, col]
-        temp = np.array(temp).reshape(-1, 1)
-        linear_model.fit(x_current, y_train)
-        if metrics.mean_squared_error(y_train, linear_model.predict(x_current)) <= 0.5716:
-            if x_train[col].nunique() > 2:
-                mean = x_train[col].mean()
-                global_vars[col] = mean
-            else:
-                mode = x_train[col].mode()
-                global_vars[col] = mode
-            count += 1
-            selected_features.append(col)
-            print(f"Train mean sqError {col}{metrics.mean_squared_error(y_train, linear_model.predict(x_current))}\n")
-            print(f"Test mean sqError for {col} {metrics.mean_squared_error(y_test, linear_model.predict(temp))} \n")
-    global_vars['In-app Purchases'] = 0.0
-    # print(f"counter = {count}")
-    x_train = x_train[selected_features]
-
-    return x_train
+# def wrapper_feature_selection(x_train, y_train, x_test, y_test):
+#     count = 0
+#     for col in x_train.columns:
+#         x_current = x_train.loc[:, col]
+#         linear_model = LinearRegression()
+#         y_test = np.array(y_test).reshape(-1, 1)
+#         y_train = np.array(y_train).reshape(-1, 1)
+#         x_current = np.array(x_current).reshape(-1, 1)
+#         temp = x_test.loc[:, col]
+#         temp = np.array(temp).reshape(-1, 1)
+#         linear_model.fit(x_current, y_train)
+#         if metrics.mean_squared_error(y_train, linear_model.predict(x_current)) <= 0.5716:
+#             if x_train[col].nunique() > 2:
+#                 mean = x_train[col].mean()
+#                 global_vars[col] = mean
+#             else:
+#                 mode = x_train[col].mode()
+#                 global_vars[col] = mode
+#             count += 1
+#             selected_features.append(col)
+#             print(f"Train mean sqError {col}{metrics.mean_squared_error(y_train, linear_model.predict(x_current))}\n")
+#             print(f"Test mean sqError for {col} {metrics.mean_squared_error(y_test, linear_model.predict(temp))} \n")
+#     global_vars['In-app Purchases'] = 0.0
+#     # print(f"counter = {count}")
+#     x_train = x_train[selected_features]
+#
+#     return x_train
 
 
 def feature_standardization_fit(df):
@@ -257,3 +255,59 @@ def calc_modes_of_features(x_train):
 # plt.show()
 
 # print(df.dtypes)
+def replace_genres_missing_vals(row):
+    if not row['Primary Genre'] == '' and row['Genres'] == '':
+        row['Genres'] = row['Primary Genre']
+    elif not row['Genres'] == '' and row['Primary Genre'] == '':
+        row['Primary Genre'] = row['Genres'].iloc[0]
+    elif row['Primary Genre'] == '' and row['Genres'] == '':
+        row['Genres'] = global_vars['Genres']
+        row['Primary Genre'] = global_vars['Primary Genre']
+    return row
+
+
+def remove_first_word(feature):
+    feature = list(
+        feature.apply(lambda colm: ', '.join(colm.split(', ')[1:] if len(colm.split(', ')) > 1 else colm.split(', '))))
+    return feature
+
+
+def remove_special_chars(data_frame, column_name):
+    # Define a pattern to match special characters
+    # pattern = r'[^a-zA-Z0-9\s]'
+    pattern = r'[^a-zA-Z0-9\s.,:\'()\-"\\]'
+    # Create a boolean mask to identify rows with special characters in the specified column
+    mask = data_frame[column_name].str.contains(pattern)
+
+    # # Print the rows that will be deleted
+    # print("Rows to be deleted:")
+    # print(df[mask])
+    # Drop rows with special characters in the specified column
+    data_frame = data_frame[~mask]
+    return data_frame
+
+
+def weight_genres(genres):
+    # Create a dictionary to hold the weights
+    weights = {}
+    # Loop through the genres list and assign weights based on order of appearance
+    for i, genre in enumerate(genres):
+        weights[genre] = len(genres) - i
+    return weights
+
+
+def get_mode_or_mean(feature, data_frame, flag=0):
+    if flag == 0:
+        return data_frame[feature].mode().iloc[0]
+    else:
+        return data_frame[feature].mean()
+
+
+def wrapper_feature_selection(x, y):
+    linear_model = LinearRegression()
+    rfe = RFE(estimator=linear_model, n_features_to_select=15)
+    rfe.fit(x, y)
+    # Print the selected features
+    print(x.columns[rfe.support_])
+    x_train_selected = x[x.columns[rfe.support_]]
+    return x_train_selected
