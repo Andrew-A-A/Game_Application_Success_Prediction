@@ -10,6 +10,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, KFold, cross_val_score, GridSearchCV
 from sklearn.preprocessing import LabelEncoder, StandardScaler, PolynomialFeatures
 import nltk
+from scipy.sparse import csr_matrix
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
@@ -19,11 +20,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 lemmatizer = WordNetLemmatizer()
 vectorizer = TfidfVectorizer()
 
+
 def preprocess_text(text):
     words = word_tokenize(text.lower())
     words = [lemmatizer.lemmatize(w) for w in words]
     s_words = set(words)
     return s_words
+
 
 def feature_extraction(col):
     returned_list = []
@@ -41,11 +44,14 @@ def feature_extraction(col):
         nouns = [word for word, pos in pos_tags if pos.startswith('NN')]
         nouns = ' '.join(nouns)
         returned_list.append(nouns)
-    returned_list = pd.DataFrame({'New':returned_list})
-    print(returned_list)
+    returned_list = pd.DataFrame({'New': returned_list})
+   # print(returned_list)
     features = vectorizer.fit_transform(returned_list['New'])
-    print(features)
-    return features
+   # print(features)
+    newDF = pd.DataFrame(features.toarray(), columns=vectorizer.get_feature_names_out())
+    newDF = newDF.sum(axis=1)
+    return newDF
+
 
 import feature_extraction_bouns
 
@@ -131,7 +137,7 @@ print(X.columns)
 # X['Description'] = vectorizer.fit_transform(X['Description']).shape[1]
 
 # Split the X and the Y to training and testing sets
-x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=False, random_state=0)
+x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=10)
 
 # ----------------------------------------Training Preprocessing----------------------------------------
 # Drop unimportant columns
@@ -139,7 +145,7 @@ unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL']
 x_train = drop_columns(x_train, unimportant_columns)
 
 # x_train['Description'] = x_train['Description'].apply(lambda x: feature_extraction(x).shape[1])
-x_train['Description'] = feature_extraction(x_train['Description']).shape[1]
+x_train['Description'] = feature_extraction(x_train['Description'])
 
 # Fill missing values in "In-app purchases" column with zero
 x_train['In-app Purchases'] = fill_nulls(x_train['In-app Purchases'], 0)
@@ -218,14 +224,15 @@ print(x_train.shape)
 
 data = x_train.join(y_train)
 game_data = data.iloc[:, :]
-corr = game_data.corr(method='spearman')
+corr = game_data.corr(method='spearman',numeric_only=True)
 # #Top 50% Correlation training features with the Value
 top_feature = corr.index[abs(corr['Average_User_Rating']) > 0.03]
+print('Top Features',top_feature)
 # Correlation plot
 plt.subplots(figsize=(12, 8))
 top_corr = game_data[top_feature].corr(method='spearman')
 sns.heatmap(top_corr, annot=True)
-# plt.show()
+#plt.show()
 
 x_data = game_data[top_feature]
 print(x_data.columns)
@@ -241,7 +248,7 @@ x_train = game_data.drop('Average_User_Rating', axis=1)
 x_test = drop_columns(x_test, unimportant_columns)
 
 # x_test['Description'] = x_test['Description'].apply(lambda x: feature_extraction(x).shape[1])
-x_test['Description'] = feature_extraction(x_test['Description']).shape[1]
+x_test['Description'] = feature_extraction(x_test['Description'])
 
 # Fill missing values in "In-app purchases" column with zero
 # x_test['In-app Purchases'] = fill_nulls(x_test['In-app Purchases'], 0)
