@@ -1,12 +1,13 @@
 import numpy
 import pandas as pd
+import numpy as np
 from matplotlib import pyplot as plt
-from sklearn.linear_model import LinearRegression,LassoCV,RidgeCV
+from sklearn.linear_model import LinearRegression,LassoCV,RidgeCV,ElasticNet
 from sklearn.feature_selection import RFE
-from sklearn.model_selection import train_test_split, KFold, cross_val_score
+from sklearn.metrics import mean_squared_error, r2_score,accuracy_score
+from sklearn.model_selection import train_test_split, KFold, cross_val_score,GridSearchCV
 from sklearn.preprocessing import LabelEncoder, StandardScaler, PolynomialFeatures
 import seaborn as sns
-from sklearn import metrics
 from datetime import datetime
 def drop_columns(df, columns_names):
     for col in columns_names:
@@ -121,7 +122,8 @@ data=remove_special_chars(data,'Developer')
 y_train = data['Average_User_Rating']
 x_train = data.drop('Average_User_Rating', axis=1)
 x_train['Developer'] = x_train['Developer'].str.replace(r'\\xe7\\xe3o', ' ')
-global_vars['Developer']=x_train['Developer'].mode().iloc[0]
+# filling Developer with the mentioned developer in the description column
+global_vars['Developer']='Unknown'
 global_vars['User Rating Count']=x_train['User Rating Count'].mean()
 global_vars['Size']=x_train['Size'].mean()
 # pattern = r'(\\u[0-9a-fA-F]{4})+'
@@ -135,8 +137,9 @@ lang_encoder=LabelEncoder()
 x_train['Languages'] = lang_encoder.fit_transform(x_train['Languages'])
 
 primary_genre_encoder=LabelEncoder()
-# x_train['Primary Genre']= primary_genre_encoder.fit_transform(x_train['Primary Genre'])
+x_train['Primary Genre']= primary_genre_encoder.fit_transform(x_train['Primary Genre'])
 x_train.drop('Primary Genre',axis=1,inplace=True)
+
 x_train['Original Release Date']=pd.to_datetime(x_train['Original Release Date'], errors = 'coerce')
 x_train['Current Version Release Date']=pd.to_datetime(x_train['Current Version Release Date'], errors = 'coerce')
 x_train['Difference in Days']=(x_train['Current Version Release Date']-x_train['Original Release Date']).dt.days
@@ -192,14 +195,19 @@ x_test['In-app Purchases'] = calc_sum_of_list(x_test['In-app Purchases'])
 x_test['Original Release Date']=pd.to_datetime(x_test['Original Release Date'], errors = 'coerce')
 x_test['Current Version Release Date']=pd.to_datetime(x_test['Current Version Release Date'], errors = 'coerce')
 
+# Remove the '+' sign from the 'Age rating' column
+x_test['Age Rating'] = x_test['Age Rating'].str.replace('+', '', regex=False)
+
+# Convert the 'Age rating' column to an integer data type
+x_test['Age Rating'] = x_test['Age Rating'].astype(int)
 
 
 # Fill missing values in column 'Languages' with the mode
 # x_test['Languages'] = fill_nulls_with_mode(x_train['Languages'])
 print(x_train.dtypes)
-x_test.drop('Primary Genre', axis=1, inplace=True)
+global_vars['Genres']=global_vars['Primary Genre']
 for col in x_test.columns:
-    if col == 'In-app Purchases' or col=='Genres' or col=='Price':
+    if col == 'In-app Purchases' or col=='Price':
         x_test[col] = fill_nulls(x_test[col], 0)
     else:
         x_test[col].fillna(global_vars[col],inplace=True)
@@ -210,11 +218,6 @@ x_test.drop(['Original Release Date','Current Version Release Date'],axis=1,inpl
 # change datatypes from object
 x_test = x_test.convert_dtypes()
 
-# Remove the '+' sign from the 'Age rating' column
-x_test['Age Rating'] = x_test['Age Rating'].str.replace('+', '', regex=False)
-
-# Convert the 'Age rating' column to an integer data type
-x_test['Age Rating'] = x_test['Age Rating'].astype(int)
 
 # Remove the primary genre from the "Genres" feature
 x_test['Genres'] = remove_first_word(x_test['Genres'])
@@ -248,7 +251,7 @@ y_test = x_test_data['Average_User_Rating']
 x_test = x_test_data.drop('Average_User_Rating', axis=1)
 #----------------------------------------------------Modelssss----------------------------------------------------------
 print("\nPolynomial Regression Model............................\n")
-poly_features = PolynomialFeatures(degree=2)
+poly_features = PolynomialFeatures(degree=4)
 
 X_train_poly = poly_features.fit_transform(x_train)
 
@@ -257,8 +260,9 @@ poly_model.fit(X_train_poly, y_train)
 
 y_train_predicted = poly_model.predict(X_train_poly)
 y_predict = poly_model.predict(poly_features.transform(x_test))
-print('Mean Square Error Train', metrics.mean_squared_error(y_train, y_train_predicted))
-print('Mean Square Error Test', metrics.mean_squared_error(y_test, y_predict))
+print('Mean Square Error Train', mean_squared_error(y_train, y_train_predicted))
+print('Mean Square Error Test', mean_squared_error(y_test, y_predict))
+
 
 k_folds = KFold(n_splits=15)
 scores = cross_val_score(poly_model, x_train, y_train, scoring='neg_mean_squared_error', cv=k_folds)
@@ -271,8 +275,9 @@ linearReg.fit(x_train,y_train)
 
 y_train_predicted = linearReg.predict(x_train)
 y_predict = linearReg.predict(x_test)
-print('Mean Square Error Train', metrics.mean_squared_error(y_train, y_train_predicted))
-print('Mean Square Error Test', metrics.mean_squared_error(y_test, y_predict))
+print('Mean Square Error Train', mean_squared_error(y_train, y_train_predicted))
+print('Mean Square Error Test', mean_squared_error(y_test, y_predict))
+
 
 k_folds = KFold(n_splits=15)
 scores = cross_val_score(linearReg, x_train, y_train, scoring='neg_mean_squared_error', cv=k_folds)
@@ -289,7 +294,8 @@ print("The train score for lasso model is", lasso_cv.score(x_train, y_train))
 print("The test score for lasso model is", lasso_cv.score(x_test, y_test))
 
 
-fold = KFold(n_splits=25)
+
+fold = KFold(n_splits=15)
 ridgeReg = RidgeCV(alphas=[0.0001, 0.001, 0.01, 0.1, 1, 10], cv=fold)
 ridgeReg.fit(x_train, y_train)
 # train and test score for ridge regression
@@ -299,3 +305,32 @@ test_score_ridge = ridgeReg.score(x_test, y_test)
 print("\nRidge Model............................................\n")
 print("The train score for ridge model is {}".format(train_score_ridge))
 print("The test score for ridge model is {}".format(test_score_ridge))
+
+
+
+print("\nElastic Net Model........................................\n")
+en = ElasticNet()
+
+parameters = {'alpha': [0.1, 0.5, 1, 5, 10],
+              'l1_ratio': [0.1, 0.3, 0.5, 0.7, 0.9]}
+
+grid_search = GridSearchCV(estimator=en, param_grid=parameters,
+                           scoring='neg_mean_squared_error', cv=10)
+grid_search.fit(x_train,y_train)
+
+best_params = grid_search.best_params_
+print('Best Hyperparameters:', best_params)
+
+best_score = np.sqrt(-grid_search.best_score_)
+print('Best RMSE:', best_score)
+
+en_best = ElasticNet(**best_params)
+en_best.fit(x_train, y_train)
+
+y_pred = en_best.predict(x_test)
+mse_train =mean_squared_error(y_train,en_best.predict(x_train))
+mse_test = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+print('Mean Squared Error of Train:', mse_train)
+print('Mean Squared Error of Test:', mse_test)
+print('R2 Score:', r2)
