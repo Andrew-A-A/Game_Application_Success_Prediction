@@ -1,21 +1,19 @@
 from datetime import datetime
 
+import nltk
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
+from nltk.corpus import wordnet
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import RFE
 from sklearn.linear_model import LinearRegression, LassoCV, RidgeCV, ElasticNet
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, KFold, cross_val_score, GridSearchCV
 from sklearn.preprocessing import LabelEncoder, StandardScaler, PolynomialFeatures
-import nltk
-from scipy.sparse import csr_matrix
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import wordnet
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 lemmatizer = WordNetLemmatizer()
 vectorizer = TfidfVectorizer()
@@ -28,9 +26,9 @@ def preprocess_text(text):
     return s_words
 
 
-def feature_extraction(col):
+def feature_extraction(description_column):
     returned_list = []
-    for description in col:
+    for description in description_column:
         words = preprocess_text(description)
         meaningful_words = []
         for word in words:
@@ -45,15 +43,15 @@ def feature_extraction(col):
         nouns = ' '.join(nouns)
         returned_list.append(nouns)
     returned_list = pd.DataFrame({'New': returned_list})
-   # print(returned_list)
+    # print(returned_list)
     features = vectorizer.fit_transform(returned_list['New'])
-   # print(features)
-    newDF = pd.DataFrame(features.toarray(), columns=vectorizer.get_feature_names_out())
-    newDF = newDF.sum(axis=1)
-    return newDF
-
-
-import feature_extraction_bouns
+    print(features)
+    # Calculate the average TF-IDF value for each row
+    max_tfidf = features.max(axis=1)
+    max_tfidf = max_tfidf.todense().A1
+    # Assign the average TF-IDF values to a new column in the data frame
+    description_column = max_tfidf
+    return description_column
 
 
 def drop_columns(data_frame, columns_names):
@@ -137,7 +135,7 @@ print(X.columns)
 # X['Description'] = vectorizer.fit_transform(X['Description']).shape[1]
 
 # Split the X and the Y to training and testing sets
-x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=10)
+x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=0)
 
 # ----------------------------------------Training Preprocessing----------------------------------------
 # Drop unimportant columns
@@ -224,15 +222,15 @@ print(x_train.shape)
 
 data = x_train.join(y_train)
 game_data = data.iloc[:, :]
-corr = game_data.corr(method='spearman',numeric_only=True)
+corr = game_data.corr(method='spearman', numeric_only=True)
 # #Top 50% Correlation training features with the Value
 top_feature = corr.index[abs(corr['Average_User_Rating']) > 0.03]
-print('Top Features',top_feature)
+print('Top Features', top_feature)
 # Correlation plot
 plt.subplots(figsize=(12, 8))
 top_corr = game_data[top_feature].corr(method='spearman')
 sns.heatmap(top_corr, annot=True)
-#plt.show()
+# plt.show()
 
 x_data = game_data[top_feature]
 print(x_data.columns)
