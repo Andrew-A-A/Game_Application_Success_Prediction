@@ -1,6 +1,48 @@
 from Preprocessing import *
+import nltk
+from nltk.corpus import wordnet
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 new_columns = []
+lemmatizer = WordNetLemmatizer()
+vectorizer = TfidfVectorizer()
+
+
+def preprocess_text(text):
+    words = word_tokenize(text.lower())
+    words = [lemmatizer.lemmatize(w) for w in words]
+    s_words = set(words)
+    return s_words
+
+
+def feature_extraction(description_column):
+    returned_list = []
+    for description in description_column:
+        words = preprocess_text(description)
+        meaningful_words = []
+        for word in words:
+            if len(word) < 3:
+                continue
+            synsets = wordnet.synsets(word)
+            if synsets:
+                meaningful_words.append(word)
+
+        pos_tags = nltk.pos_tag(meaningful_words)
+        nouns = [word for word, pos in pos_tags if pos.startswith('NN')]
+        nouns = ' '.join(nouns)
+        returned_list.append(nouns)
+    returned_list = pd.DataFrame({'New': returned_list})
+    # print(returned_list)
+    features = vectorizer.fit_transform(returned_list['New'])
+    print(features)
+    # Calculate the average TF-IDF value for each row
+    max_tfidf = features.max(axis=1)
+    max_tfidf = max_tfidf.todense().A1
+    # Assign the average TF-IDF values to a new column in the data frame
+    description_column = max_tfidf
+    return description_column
 
 
 def feature_encoder_apply(test, columns):
@@ -11,7 +53,7 @@ def feature_encoder_apply(test, columns):
 
 
 def hot_one_encode(df, column, new_columns=None):
-    y = df['Average_User_Rating']
+    y = df['Average User Rating']
     # Convert the string in column Genres into a list
     df[column] = df[column].apply(lambda x: x.replace(' ', '').split(','))
     # Split the values in column Genres into multiple rows
@@ -44,6 +86,7 @@ def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_e
     # Drop unimportant data from the test data
     x_test = drop_columns(x_test, unimportant_columns)
 
+    x_test['Description']=feature_extraction(x_test['Description'])
     # Replace the list in 'In-app Purchases' column with the sum of the list in each entry
     x_test['In-app Purchases'] = calc_sum_of_list(x_test['In-app Purchases'])
 
@@ -79,8 +122,8 @@ def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_e
 
     test_data = x_test.join(y_test)
     test_data = remove_special_chars(test_data, 'Developer')
-    y_test = test_data['Average_User_Rating']
-    x_test = test_data.drop('Average_User_Rating', axis=1)
+    y_test = test_data['Average User Rating']
+    x_test = test_data.drop('Average User Rating', axis=1)
 
     x_test['Developer'] = dev_encoder.transform(x_test['Developer'])
     x_test['Languages'] = lang_encoder.transform(x_test['Languages'])
@@ -118,8 +161,8 @@ def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_e
     col_test = x_test_data.columns
     x_test_data = standardization.transform(x_test_data[top_feature])
     x_test_data = pd.DataFrame(x_test_data, columns=top_feature)
-    y_test = x_test_data['Average_User_Rating']
-    x_test = x_test_data.drop('Average_User_Rating', axis=1)
+    y_test = x_test_data['Average User Rating']
+    x_test = x_test_data.drop('Average User Rating', axis=1)
     return x_test, y_test
 
 

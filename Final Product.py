@@ -1,12 +1,57 @@
 from datetime import datetime
+
+import nltk
 from sklearn.linear_model import RidgeCV, ElasticNet
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from Test import *
+from nltk.corpus import wordnet
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 # Imports for the plot
 # import seaborn as sns
 # from matplotlib import pyplot as plt
+
+lemmatizer = WordNetLemmatizer()
+vectorizer = TfidfVectorizer()
+
+
+def preprocess_text(text):
+    words = word_tokenize(text.lower())
+    words = [lemmatizer.lemmatize(w) for w in words]
+    s_words = set(words)
+    return s_words
+
+
+def feature_extraction(description_column):
+    returned_list = []
+    for description in description_column:
+        words = preprocess_text(description)
+        meaningful_words = []
+        for word in words:
+            if len(word) < 3:
+                continue
+            synsets = wordnet.synsets(word)
+            if synsets:
+                meaningful_words.append(word)
+
+        pos_tags = nltk.pos_tag(meaningful_words)
+        nouns = [word for word, pos in pos_tags if pos.startswith('NN')]
+        nouns = ' '.join(nouns)
+        returned_list.append(nouns)
+    returned_list = pd.DataFrame({'New': returned_list})
+    # print(returned_list)
+    features = vectorizer.fit_transform(returned_list['New'])
+    print(features)
+    # Calculate the average TF-IDF value for each row
+    max_tfidf = features.max(axis=1)
+    max_tfidf = max_tfidf.todense().A1
+    # Assign the average TF-IDF values to a new column in the data frame
+    description_column = max_tfidf
+    return description_column
 
 # Global dictionary that will store the mean/mode of each feature to use it in testing
 global_vars = {}
@@ -15,16 +60,18 @@ global_vars = {}
 df = pd.read_csv("games-regression-dataset.csv")
 
 # Split data frame to X and Y
-Y = df['Average_User_Rating']
-X = df.drop('Average_User_Rating', axis=1)
+Y = df['Average User Rating']
+X = df.drop('Average User Rating', axis=1)
 
 # Split the X and the Y to training and testing sets
 x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=0)
 
 # ----------------------------------------Training Preprocessing----------------------------------------
 # Drop unimportant columns
-unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL', 'Description']
+unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL']
 x_train = drop_columns(x_train, unimportant_columns)
+
+x_train['Description']=feature_extraction(x_train['Description'])
 
 # Fill missing values in "In-app purchases" column with zero
 x_train['In-app Purchases'] = fill_nulls(x_train['In-app Purchases'], 0)
@@ -51,8 +98,8 @@ x_train['Genres'] = x_train['Genres'].apply(lambda x: x.replace(' ', '').split('
 # print(x_train.shape)
 data = x_train.join(y_train)
 data = remove_special_chars(data, 'Developer')
-y_train = data['Average_User_Rating']
-x_train = data.drop('Average_User_Rating', axis=1)
+y_train = data['Average User Rating']
+x_train = data.drop('Average User Rating', axis=1)
 x_train['Developer'] = x_train['Developer'].str.replace(r'\\xe7\\xe3o', ' ', regex=True)
 # filling Developer with a default value "Unknown"
 global_vars['Developer'] = 'Unknown'
@@ -82,6 +129,7 @@ global_vars['Current Version Release Date'] = datetime.now()
 # Drop both Original Release Data and Current Version Release Date
 x_train.drop(['Original Release Date', 'Current Version Release Date'], axis=1, inplace=True)
 
+global_vars['Description'] = 'No Description'
 # Apply the weight_genres function to the genres column and store the results in a new column called genre_weights
 x_train['genre_weights'] = x_train['Genres'].apply(weight_genres)
 
@@ -101,7 +149,7 @@ data = x_train.join(y_train)
 game_data = data.iloc[:, :]
 corr = game_data.corr(method='spearman', numeric_only=True)
 # Top 50% Correlation training features with the Value
-top_feature = corr.index[abs(corr['Average_User_Rating']) > 0.03]
+top_feature = corr.index[abs(corr['Average User Rating']) > 0.03]
 print(top_feature)
 x_data = game_data[top_feature]
 
@@ -116,8 +164,8 @@ x_data = game_data[top_feature]
 standardization = StandardScaler()
 game_data = standardization.fit_transform(x_data)
 game_data = pd.DataFrame(game_data, columns=top_feature)
-y_train = game_data['Average_User_Rating']
-x_train = game_data.drop('Average_User_Rating', axis=1)
+y_train = game_data['Average User Rating']
+x_train = game_data.drop('Average User Rating', axis=1)
 
 # ---------------------------------Testing Preprocessing-----------------------------------
 

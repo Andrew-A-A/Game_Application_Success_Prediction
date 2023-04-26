@@ -219,7 +219,7 @@ def calc_modes_of_features(x_train):
 # # Get the correlation between the features
 # corr = df.corr()
 # # Top 50% Correlation training features with the Value
-# top_feature = corr.index[abs(corr['Average_User_Rating']) > 0.1]
+# top_feature = corr.index[abs(corr['Average User Rating']) > 0.1]
 # # Correlation plot
 # plt.subplots(figsize=(12, 8))
 # top_corr = df[top_feature].corr()
@@ -234,7 +234,7 @@ def calc_modes_of_features(x_train):
 # for col in df.columns:
 #     if col.startswith('Genres_') or col == categorical_columns[0] or col == categorical_columns[1] or col == \
 #             categorical_columns[2]:
-#         group = df[df[col] == 1]['Average_User_Rating']
+#         group = df[df[col] == 1]['Average User Rating']
 #         groups.append(group)
 # # Perform one-way ANOVA test
 # f_statistic, p_value = f_oneway(*groups)
