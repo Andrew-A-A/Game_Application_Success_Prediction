@@ -1,3 +1,4 @@
+import pandas as pd
 from Preprocessing import *
 import nltk
 from nltk.corpus import wordnet
@@ -36,7 +37,7 @@ def feature_extraction(description_column):
     returned_list = pd.DataFrame({'New': returned_list})
     # print(returned_list)
     features = vectorizer.fit_transform(returned_list['New'])
-    print(features)
+    # print(features)
     # Calculate the average TF-IDF value for each row
     max_tfidf = features.max(axis=1)
     max_tfidf = max_tfidf.todense().A1
@@ -45,39 +46,6 @@ def feature_extraction(description_column):
     return description_column
 
 
-def feature_encoder_apply(test, columns):
-    for c in columns:
-        fill_nulls(test, global_vars[c])
-        test[c] = lbl.transform(list(test[c].values))
-    return test
-
-
-def hot_one_encode(df, column, new_columns=None):
-    y = df['Average User Rating']
-    # Convert the string in column Genres into a list
-    df[column] = df[column].apply(lambda x: x.replace(' ', '').split(','))
-    # Split the values in column Genres into multiple rows
-    df = df.explode(column)
-
-    # Apply one-hot encoding to column Genres
-    df_encoded = pd.get_dummies(df, columns=[column])
-
-    # Add any missing columns
-    if new_columns is not None:
-        missing_columns = new_columns.difference(df_encoded.columns)
-        for col in missing_columns:
-            df_encoded[col] = 0
-    # Drop the duplicates
-    df_encoded = df_encoded.drop_duplicates()
-
-    return df_encoded
-
-
-def feature_standardization_apply(test):
-    column_names = test.columns.tolist()
-    scaled_data = standardization.transform(test)
-    test = pd.DataFrame(scaled_data, columns=column_names)
-    return test
 
 
 def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_encoder, lang_encoder,
@@ -86,7 +54,7 @@ def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_e
     # Drop unimportant data from the test data
     x_test = drop_columns(x_test, unimportant_columns)
 
-    x_test['Description']=feature_extraction(x_test['Description'])
+    x_test['Description'] = feature_extraction(x_test['Description'])
     # Replace the list in 'In-app Purchases' column with the sum of the list in each entry
     x_test['In-app Purchases'] = calc_sum_of_list(x_test['In-app Purchases'])
 
@@ -166,7 +134,7 @@ def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_e
     return x_test, y_test
 
 
-def cross_validation(model, x_train, y_train,n_splits):
+def cross_validation(model, x_train, y_train, n_splits):
     k_folds = KFold(n_splits)
     scores = cross_val_score(model, x_train, y_train, scoring='neg_mean_squared_error', cv=k_folds)
     model_score = abs(scores.mean())

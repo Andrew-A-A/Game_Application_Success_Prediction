@@ -1,7 +1,8 @@
+import pickle
 from datetime import datetime
 
-import nltk
-from sklearn.linear_model import RidgeCV, ElasticNet
+import pandas as pd
+from sklearn.linear_model import RidgeCV, ElasticNet, LinearRegression, LassoCV
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
@@ -10,10 +11,10 @@ from nltk.corpus import wordnet
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
-
+from pandas_profiling import ProfileReport
 # Imports for the plot
-# import seaborn as sns
-# from matplotlib import pyplot as plt
+import seaborn as sns
+from matplotlib import pyplot as plt
 
 lemmatizer = WordNetLemmatizer()
 vectorizer = TfidfVectorizer()
@@ -45,7 +46,7 @@ def feature_extraction(description_column):
     returned_list = pd.DataFrame({'New': returned_list})
     # print(returned_list)
     features = vectorizer.fit_transform(returned_list['New'])
-    print(features)
+    # print(features)
     # Calculate the average TF-IDF value for each row
     max_tfidf = features.max(axis=1)
     max_tfidf = max_tfidf.todense().A1
@@ -53,11 +54,13 @@ def feature_extraction(description_column):
     description_column = max_tfidf
     return description_column
 
+
 # Global dictionary that will store the mean/mode of each feature to use it in testing
 global_vars = {}
 
 # Load the csv file
 df = pd.read_csv("games-regression-dataset.csv")
+
 
 # Split data frame to X and Y
 Y = df['Average User Rating']
@@ -66,12 +69,20 @@ X = df.drop('Average User Rating', axis=1)
 # Split the X and the Y to training and testing sets
 x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=0)
 
+# Generate the report
+#profile = ProfileReport(x_train.join(y_train))
+
+# Save the report as an HTML file
+#profile.to_file("Before_preprocessing.html")
+
 # ----------------------------------------Training Preprocessing----------------------------------------
 # Drop unimportant columns
 unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL']
 x_train = drop_columns(x_train, unimportant_columns)
 
-x_train['Description']=feature_extraction(x_train['Description'])
+x_train['Description'] = fill_nulls(x_train['Description'], 'No description')
+x_train['Age Rating'] = fill_nulls(x_train['Age Rating'], x_train['Age Rating'].mode().iloc[0])
+x_train['Description'] = feature_extraction(x_train['Description'])
 
 # Fill missing values in "In-app purchases" column with zero
 x_train['In-app Purchases'] = fill_nulls(x_train['In-app Purchases'], 0)
@@ -150,15 +161,15 @@ game_data = data.iloc[:, :]
 corr = game_data.corr(method='spearman', numeric_only=True)
 # Top 50% Correlation training features with the Value
 top_feature = corr.index[abs(corr['Average User Rating']) > 0.03]
-print(top_feature)
+# print(top_feature)
 x_data = game_data[top_feature]
 
 # Correlation plot
-# plt.subplots(figsize=(12, 8))
-# top_corr = game_data[top_feature].corr(method='spearman')
-# sns.heatmap(top_corr, annot=True)
-# plt.show()
-# print(x_data.columns)
+plt.subplots(figsize=(20, 25))
+top_corr = game_data[top_feature].corr(method='spearman')
+sns.heatmap(top_corr, annot=True)
+plt.show()
+print(x_data.columns)
 
 # Standardize the data
 standardization = StandardScaler()
@@ -169,8 +180,19 @@ x_train = game_data.drop('Average User Rating', axis=1)
 
 # ---------------------------------Testing Preprocessing-----------------------------------
 
+variables = {'unimportant columns': unimportant_columns, 'global variables': global_vars, 'dev encoder': dev_encoder,
+             'lang encoder': lang_encoder,
+             'primary genre encoder': primary_genre_encoder, 'top feature': top_feature, 'x train': x_train,
+             'unique genres': unique_genres,
+             'standardization': standardization}
+pickle.dump(variables, open('vars.pkl', 'wb'))
+
 x_test, y_test = preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_encoder, lang_encoder,
                                       primary_genre_encoder, top_feature, x_train, unique_genres, standardization)
+train_d = x_train.join(y_train)
+train_d = train_d.drop_duplicates()
+y_train = train_d['Average User Rating']
+x_train = train_d.drop('Average User Rating', axis=1)
 # ----------------------------------------------------Models----------------------------------------------------------
 print("\nPolynomial Regression Model............................\n")
 poly_features = PolynomialFeatures(degree=4)
@@ -248,3 +270,14 @@ r2 = r2_score(y_test, y_pred)
 print('Mean Squared Error of Train:', mse_train)
 print('Mean Squared Error of Test:', mse_test)
 print('R2 Score:', r2)
+
+models = {'polynomial': poly_model, 'linear regression': linearReg, 'lassoCv': lasso_cv, 'ridgeCv': ridgeReg,
+          'elastic net': en_best}
+pickle.dump(models, open('models.pkl', 'wb'))
+
+# Generate the report
+#profile = ProfileReport(train_d)
+
+# Save the report as an HTML file
+#profile.to_file("After_preprocessing.html")
+
