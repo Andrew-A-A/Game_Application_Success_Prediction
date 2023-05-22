@@ -46,8 +46,6 @@ def feature_extraction(description_column):
     return description_column
 
 
-
-
 def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_encoder, lang_encoder,
                          primary_genre_encoder,
                          top_feature, x_train, unique_genres, standardization):
@@ -58,7 +56,7 @@ def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_e
     # Replace the list in 'In-app Purchases' column with the sum of the list in each entry
     x_test['In-app Purchases'] = calc_sum_of_list(x_test['In-app Purchases'])
 
-    # Change data type to "datetime" in the 'Original Release Date' and 'Current Version Release Date' columns
+    # Change the data type to "datetime" in the 'Original Release Date' and 'Current Version Release Date' columns
     x_test['Original Release Date'] = pd.to_datetime(x_test['Original Release Date'], errors='coerce',
                                                      format='%d/%m/%Y')
     x_test['Current Version Release Date'] = pd.to_datetime(x_test['Current Version Release Date'], errors='coerce',
@@ -70,7 +68,6 @@ def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_e
     # Convert the 'Age rating' column to an integer data type
     x_test['Age Rating'] = x_test['Age Rating'].astype(int)
 
-    # x_test['Languages'] = fill_nulls_with_mode(x_train['Languages'])
     # print(x_train.dtypes)
     global_vars['Genres'] = global_vars['Primary Genre']
 
@@ -97,7 +94,7 @@ def preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_e
     x_test['Languages'] = lang_encoder.transform(x_test['Languages'])
     x_test['Primary Genre'] = primary_genre_encoder.transform(x_test['Primary Genre'])
 
-    # change datatypes from object
+    # change datatypes from object to primitive types
     x_test = x_test.convert_dtypes()
 
     # Remove the primary genre from the "Genres" feature

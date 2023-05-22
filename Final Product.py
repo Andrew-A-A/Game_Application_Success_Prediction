@@ -1,19 +1,13 @@
+import pickle
 from datetime import datetime
-
-import pandas as pd
 from sklearn.linear_model import RidgeCV, ElasticNet, LinearRegression, LassoCV
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from Test import *
-from nltk.corpus import wordnet
-from nltk.stem import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
-from sklearn.feature_extraction.text import TfidfVectorizer
+
 # from pandas_profiling import ProfileReport
 # Imports for the plot
-import seaborn as sns
-from matplotlib import pyplot as plt
 
 lemmatizer = WordNetLemmatizer()
 vectorizer = TfidfVectorizer()
@@ -45,13 +39,14 @@ def feature_extraction(description_column):
     returned_list = pd.DataFrame({'New': returned_list})
     # print(returned_list)
     features = vectorizer.fit_transform(returned_list['New'])
-    print(features)
+    # print(features)
     # Calculate the average TF-IDF value for each row
     max_tfidf = features.max(axis=1)
     max_tfidf = max_tfidf.todense().A1
     # Assign the average TF-IDF values to a new column in the data frame
     description_column = max_tfidf
     return description_column
+
 
 # Global dictionary that will store the mean/mode of each feature to use it in testing
 global_vars = {}
@@ -64,47 +59,66 @@ Y = df['Average User Rating']
 X = df.drop('Average User Rating', axis=1)
 
 # Split the X and the Y to training and testing sets
-x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=0)
+x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.20, shuffle=True, random_state=10)
+
+# Generate the report
+# profile = ProfileReport(x_train.join(y_train))
+
+# Save the report as an HTML file
+# profile.to_file("Before_preprocessing.html")
 
 # ----------------------------------------Training Preprocessing----------------------------------------
-# Drop unimportant columns
+# Drop unimportant columns (unique)
 unimportant_columns = ['URL', 'ID', 'Name', 'Subtitle', 'Icon URL']
 x_train = drop_columns(x_train, unimportant_columns)
 
-x_train['Description']=feature_extraction(x_train['Description'])
+x_train['Description'] = fill_nulls(x_train['Description'], 'No description')
+x_train['Age Rating'] = fill_nulls(x_train['Age Rating'], x_train['Age Rating'].mode().iloc[0])
+x_train['Description'] = feature_extraction(x_train['Description'])
 
 # Fill missing values in "In-app purchases" column with zero
 x_train['In-app Purchases'] = fill_nulls(x_train['In-app Purchases'], 0)
 x_train['In-app Purchases'] = calc_sum_of_list(x_train['In-app Purchases'])
+
 # Fill missing values in column 'Languages' with the mode
 global_vars['Languages'] = x_train['Languages'].mode().iloc[0]
 x_train['Languages'] = fill_nulls_with_mode(x_train['Languages'])
 
-# change datatypes from object
+# change datatypes from object to a proper datatype
 x_train = x_train.convert_dtypes()
 
 # Remove the '+' sign from the 'Age rating' column
 x_train['Age Rating'] = x_train['Age Rating'].str.replace('+', '', regex=False)
+
 # Convert the 'Age rating' column to an integer data type
 x_train['Age Rating'] = x_train['Age Rating'].astype(int)
 
+# Add this to fill the nulls in the test data set with this values
 global_vars['In-app Purchase'] = 0
 global_vars['Age Rating'] = x_train['Age Rating'].mode().iloc[0]
 global_vars['Primary Genre'] = x_train['Primary Genre'].mode().iloc[0]
+global_vars['Developer'] = 'Unknown'
+global_vars['User Rating Count'] = x_train['User Rating Count'].mean()
+global_vars['Size'] = x_train['Size'].mean()
+global_vars['Original Release Date'] = datetime.now()
+global_vars['Current Version Release Date'] = datetime.now()
+global_vars['Description'] = 'No Description'
+
 # Remove the primary genre from the "Genres" feature
 x_train['Genres'] = remove_first_word(x_train['Genres'])
 x_train['Genres'] = x_train['Genres'].apply(lambda x: x.replace(' ', '').split(','))
 
 # print(x_train.shape)
+
+# Remove special characters from the data in developer column
 data = x_train.join(y_train)
 data = remove_special_chars(data, 'Developer')
+
+# Re-split the train data set again
 y_train = data['Average User Rating']
 x_train = data.drop('Average User Rating', axis=1)
 x_train['Developer'] = x_train['Developer'].str.replace(r'\\xe7\\xe3o', ' ', regex=True)
-# filling Developer with a default value "Unknown"
-global_vars['Developer'] = 'Unknown'
-global_vars['User Rating Count'] = x_train['User Rating Count'].mean()
-global_vars['Size'] = x_train['Size'].mean()
+
 # print(x_train.shape)
 
 # Encode categorical columns (Developer, Languages and Primary Genre)
@@ -121,16 +135,12 @@ x_train['Current Version Release Date'] = pd.to_datetime(x_train['Current Versio
                                                          format='%d/%m/%Y')
 x_train['Difference in Days'] = (x_train['Current Version Release Date'] - x_train['Original Release Date']).dt.days
 
-# Add current Date to the global vars to use it in case that user entered empty date
-global_vars['Original Release Date'] = datetime.now()
-global_vars['Current Version Release Date'] = datetime.now()
 # print(x_train.shape)
 
 # Drop both Original Release Data and Current Version Release Date
 x_train.drop(['Original Release Date', 'Current Version Release Date'], axis=1, inplace=True)
 
-global_vars['Description'] = 'No Description'
-# Apply the weight_genres function to the genres column and store the results in a new column called genre_weights
+# Apply the weight_genres function to genres' column and store the results in a new column called genre_weights
 x_train['genre_weights'] = x_train['Genres'].apply(weight_genres)
 
 # Create a list of all unique genres in the dataset
@@ -150,7 +160,7 @@ game_data = data.iloc[:, :]
 corr = game_data.corr(method='spearman', numeric_only=True)
 # Top 50% Correlation training features with the Value
 top_feature = corr.index[abs(corr['Average User Rating']) > 0.03]
-print(top_feature)
+# print(top_feature)
 x_data = game_data[top_feature]
 
 # Correlation plot
@@ -169,8 +179,19 @@ x_train = game_data.drop('Average User Rating', axis=1)
 
 # ---------------------------------Testing Preprocessing-----------------------------------
 
+variables = {'unimportant columns': unimportant_columns, 'global variables': global_vars, 'dev encoder': dev_encoder,
+             'lang encoder': lang_encoder,
+             'primary genre encoder': primary_genre_encoder, 'top feature': top_feature, 'x train': x_train,
+             'y train': y_train, 'unique genres': unique_genres,
+             'standardization': standardization}
+pickle.dump(variables, open('vars.pkl', 'wb'))
+
 x_test, y_test = preprocess_test_data(x_test, y_test, unimportant_columns, global_vars, dev_encoder, lang_encoder,
                                       primary_genre_encoder, top_feature, x_train, unique_genres, standardization)
+train_d = x_train.join(y_train)
+train_d = train_d.drop_duplicates()
+y_train = train_d['Average User Rating']
+x_train = train_d.drop('Average User Rating', axis=1)
 # ----------------------------------------------------Models----------------------------------------------------------
 print("\nPolynomial Regression Model............................\n")
 poly_features = PolynomialFeatures(degree=4)
@@ -221,12 +242,11 @@ test_score_ridge = ridgeReg.score(x_test, y_test)
 print("\nRidge Model............................................\n")
 print("The train score for ridge model is {}".format(train_score_ridge))
 print("The test score for ridge model is {}".format(test_score_ridge))
-
 print("\nElastic Net Model........................................\n")
 en = ElasticNet()
 
-parameters = {'alpha': [0.1, 0.5, 1, 5, 10],
-              'l1_ratio': [0.1, 0.3, 0.5, 0.7, 0.9]}
+parameters = {'alpha': [0.001, 0.01, 0.1, 0.5, 1, 5, 10, 50, 100],
+              'l1_ratio': [0.01, 0.02, 0.03, 0.04, 0.1, 0.3, 0.5, 0.7, 0.9]}
 
 grid_search = GridSearchCV(estimator=en, param_grid=parameters,
                            scoring='neg_mean_squared_error', cv=10)
@@ -248,3 +268,14 @@ r2 = r2_score(y_test, y_pred)
 print('Mean Squared Error of Train:', mse_train)
 print('Mean Squared Error of Test:', mse_test)
 print('R2 Score:', r2)
+
+models = {'polynomial': poly_model, 'poly features': poly_features, 'linear regression': linearReg, 'lassoCv': lasso_cv,
+          'ridgeCv': ridgeReg,
+          'grid search': grid_search, 'elastic net': en_best}
+pickle.dump(models, open('models.pkl', 'wb'))
+
+# Generate the report
+# profile = ProfileReport(train_d)
+
+# Save the report as an HTML file
+# profile.to_file("After_preprocessing.html")
